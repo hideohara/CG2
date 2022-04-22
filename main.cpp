@@ -15,6 +15,14 @@ using namespace DirectX;
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 
+#define DIRECTINPUT_VERSION     0x0800   // DirectInputのバージョン指定
+#include <dinput.h>
+
+#pragma comment(lib, "dinput8.lib")
+#pragma comment(lib, "dxguid.lib")
+
+
+
 // ウィンドウプロシージャ
 LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	// メッセージに応じてゲーム固有の処理を行う
@@ -210,6 +218,31 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// DirectX初期化処理 ここまで
 
 	// **********************************************
+	// Direct Input 初期化（キー入力）
+
+	// DirectInputの初期化
+	IDirectInput8* directInput = nullptr;
+	result = DirectInput8Create(
+		w.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&directInput, nullptr);
+	assert(SUCCEEDED(result));
+
+	// キーボードデバイスの生成
+	IDirectInputDevice8* keyboard = nullptr;
+	result = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+	assert(SUCCEEDED(result));
+
+	// 入力データ形式のセット
+	result = keyboard->SetDataFormat(&c_dfDIKeyboard); // 標準形式
+	assert(SUCCEEDED(result));
+
+	// 排他制御レベルのセット
+	result = keyboard->SetCooperativeLevel(
+		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+	assert(SUCCEEDED(result));
+
+
+
+	// **********************************************
 	// 図形描画
 
 	// 頂点データ
@@ -403,9 +436,27 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			break;
 		}
 
+
+		// *****************************************************
+		// キー入力処理
+
+		// キーボード情報の取得開始
+		keyboard->Acquire();
+
+		// 全キーの入力状態を取得する
+		BYTE key[256] = {};
+		keyboard->GetDeviceState(sizeof(key), key);
+
+		// 数字の0キーが押されていたら
+		if (key[DIK_0])
+		{
+			OutputDebugStringA("Hit 0\n");  // 出力ウィンドウに「Hit 0」と表示
+		}
+
+
+
 		// *****************************************************
 		// DirectX毎フレーム処理 ここから
-
 
 		// バックバッファの番号を取得（2つなので0番か1番）
 		UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
@@ -423,9 +474,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		rtvHandle.ptr += bbIndex * device->GetDescriptorHandleIncrementSize(rtvHeapDesc.Type);
 		commandList->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
 
+
+
+
 		// ３．画面クリア           R     G     B    A
 		FLOAT clearColor[] = { 0.1f,0.25f, 0.5f,0.0f }; // 青っぽい色
+
+		if (key[DIK_SPACE])     // スペースキーが押されていたら
+		{
+			clearColor[0] = 1.0f;
+		}
+
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+
+
+
 
 		// ４．描画コマンドここから
 		// **************************************************
