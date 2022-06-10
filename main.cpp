@@ -271,10 +271,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Vertex vertices[] = {
 		// x          y        z       u     v
-		{{-50.0f, -50.0f,  50.0f}, {0.0f, 1.0f}}, // 左下
-		{{-50.0f,  50.0f,  50.0f}, {0.0f, 0.0f}}, // 左上
-		{{ 50.0f, -50.0f,  50.0f}, {1.0f, 1.0f}}, // 右下
-		{{ 50.0f,  50.0f,  50.0f}, {1.0f, 0.0f}}, // 右上
+		{{-50.0f, -50.0f,  0.0f}, {0.0f, 1.0f}}, // 左下
+		{{-50.0f,  50.0f,  0.0f}, {0.0f, 0.0f}}, // 左上
+		{{ 50.0f, -50.0f,  0.0f}, {1.0f, 1.0f}}, // 右下
+		{{ 50.0f,  50.0f,  0.0f}, {1.0f, 0.0f}}, // 右上
 	};
 
 
@@ -614,22 +614,52 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		//	0.1f, 1000.0f			// 前端、奥端
 		//);
 
-		// 射影変換行列(透視投影)
-		XMMATRIX matProjection = XMMatrixPerspectiveFovLH(
-			XMConvertToRadians(45.0f),
-			(float)window_width / window_height,
-			0.1f, 1000.0f
-		);
-
-		//TODO) 次回、ここでビュー変換行列(透視投影)を計算
-
-		// 定数バッファに転送
-		constMapTransform->mat = matProjection;
-
-
 
 	}
 
+	// 射影変換行列(透視投影)
+	XMMATRIX matProjection = XMMatrixPerspectiveFovLH(
+		XMConvertToRadians(45.0f),
+		(float)window_width / window_height,
+		0.1f, 1000.0f
+	);
+
+	// ビュー変換行列
+	XMMATRIX matView;
+	XMFLOAT3 eye(0, 0, -100);   // 視点座標
+	XMFLOAT3 target(0, 0, 0);   // 注視点座標
+	XMFLOAT3 up(0, 1, 0);       // 上方向ベクトル
+	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
+
+	// ワールド変換行列
+	XMMATRIX matWorld;
+	//matWorld = XMMatrixIdentity();
+
+	// スケーリング
+	XMMATRIX matScale; // スケーリング行列
+	//matScale = XMMatrixScaling(1.0f, 0.5f, 1.0f);
+	//matWorld *= matScale; // ワールド行列にスケーリングを反映
+
+	// 回転
+	//XMMATRIX matRot; // 回転行列
+	//matRot = XMMatrixIdentity();
+	//matRot *= XMMatrixRotationZ(XMConvertToRadians(45.0f)); // Z軸まわりに45度回転
+	//matWorld *= matRot; // ワールド行列に回転を反映
+
+	XMMATRIX matRot; // 回転行列
+	//matRot = XMMatrixIdentity();
+	//matRot *= XMMatrixRotationZ(XMConvertToRadians(0.0f)); // Z軸まわりに0度回転してから
+	//matRot *= XMMatrixRotationX(XMConvertToRadians(15.0f)); // X軸まわりに15度回転してから
+	//matRot *= XMMatrixRotationY(XMConvertToRadians(30.0f)); // Y軸まわりに30度回転
+	//matWorld *= matRot; // ワールド行列に回転を反映
+
+	// 平行移動
+	//XMMATRIX matTrans; // 平行移動行列
+	//matTrans = XMMatrixTranslation(-50.0f, 0, 0);    // (-50,0,0)平行移動
+	//matWorld *= matTrans; // ワールド行列に平行移動を反映
+
+	// 定数バッファに転送
+	//constMapTransform->mat = matWorld * matView * matProjection;
 
 	// **********************************************
 	// 04_02. テクスチャマッピング
@@ -869,7 +899,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	assert(SUCCEEDED(result));
 
 
+	float angle = 0.0f; // カメラの回転角
+	// スケーリング倍率
+	XMFLOAT3 scale;
+	// 回転角
+	XMFLOAT3 rotation;
 
+	// 座標
+	XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
+
+	scale = { 1.f, 1.0f, 1.0f };
+	rotation = { 0.0f, 0.0f, 1.0f };
 
 	// **********************************************
 	// ゲームループ
@@ -903,14 +943,61 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			OutputDebugStringA("Hit 0\n");  // 出力ウィンドウに「Hit 0」と表示
 		}
 
-		if (key[DIK_A])
+		//if (key[DIK_A])
+		//{
+		//	constMapMaterial->color.x += 0.1f;
+		//}
+		//if (key[DIK_B])
+		//{
+		//	constMapMaterial->color.x -= 0.1f;
+		//}
+
+		// カメラ設定
+		if (key[DIK_D] || key[DIK_A])
 		{
-			constMapMaterial->color.x += 0.1f;
+			if (key[DIK_D]) { angle += XMConvertToRadians(1.0f); }
+			else if (key[DIK_A]) { angle -= XMConvertToRadians(1.0f); }
+
+			// angleラジアンだけY軸まわりに回転。半径は - 100
+			eye.x = -100 * sinf(angle);
+			eye.z = -100 * cosf(angle);
+
+			// ビュー変換行列を作り直す
+			matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 		}
-		if (key[DIK_B])
+
+
+		// いずれかのキーを押していたら
+		if (key[DIK_UP] || key[DIK_DOWN] || key[DIK_RIGHT] || key[DIK_LEFT])
 		{
-			constMapMaterial->color.x -= 0.1f;
+			// 座標を移動する処理 (Z座標)
+			if (key[DIK_UP]) { position.z += 1.0f; }
+			else if (key[DIK_DOWN]) { position.z -= 1.0f; }
+			if (key[DIK_RIGHT]) { position.x += 1.0f; }
+			else if (key[DIK_LEFT]) { position.x -= 1.0f; }
 		}
+
+		XMMATRIX matTrans; // 平行移動行列
+		matTrans = XMMatrixTranslation(position.x, position.y, position.z);
+
+		// スケーリング
+		matScale = XMMatrixScaling(scale.x, scale.y, scale.z);
+
+		// 回転
+		matRot = XMMatrixIdentity();
+		matRot *= XMMatrixRotationZ(rotation.z);
+		matRot *= XMMatrixRotationX(rotation.x);
+		matRot *= XMMatrixRotationY(rotation.y);
+
+		// 統合計算
+		matWorld = XMMatrixIdentity();
+		matWorld *= matScale;           // ワールド行列にスケーリングを反映
+		matWorld *= matRot;             // ワールド行列に回転を反映
+		matWorld *= matTrans;           // ワールド行列に平行移動を反映
+
+		//定数バッファにデータ転送
+		constMapTransform->mat = matWorld * matView * matProjection;
+
 
 
 		// *****************************************************
