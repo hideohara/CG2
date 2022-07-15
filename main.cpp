@@ -679,8 +679,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		XMMATRIX mat; // ３Ｄ変換行列
 	};
 
-	ID3D12Resource* constBuffTransform = nullptr;
-	ConstBufferDataTransform* constMapTransform = nullptr;
+	ID3D12Resource* constBuffTransform0 = nullptr;
+	ConstBufferDataTransform* constMapTransform0 = nullptr;
 	{
 		// ヒープ設定
 		D3D12_HEAP_PROPERTIES cbHeapProp{};
@@ -702,35 +702,38 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			&cbResourceDesc, // リソース設定
 			D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,
-			IID_PPV_ARGS(&constBuffTransform));
+			IID_PPV_ARGS(&constBuffTransform0));
 		assert(SUCCEEDED(result));
 
 		// 定数バッファのマッピング
-		result = constBuffTransform->Map(0, nullptr, (void**)&constMapTransform); // マッピング
+		result = constBuffTransform0->Map(0, nullptr, (void**)&constMapTransform0); // マッピング
 		assert(SUCCEEDED(result));
 
-		// 単位行列を代入
-		//constMapTransform->mat = XMMatrixIdentity();
-		//constMapTransform->mat.r[0].m128_f32[0] = 2.0f / 1280;
-		//constMapTransform->mat.r[1].m128_f32[1] = -2.0f / 720;
-		//constMapTransform->mat.r[3].m128_f32[0] = -1.0f;
-		//constMapTransform->mat.r[3].m128_f32[1] = 1.0f;
-
-		// 並行投影行列の計算
-		//constMapTransform->mat = XMMatrixOrthographicOffCenterLH(
-		//	0, window_width,
-		//	window_height, 0,
-		//	0, 1);
-
-		// 透視投影行列の計算
-		//constMapTransform->mat = XMMatrixPerspectiveFovLH(
-		//	XMConvertToRadians(45.0f),	// 上下画角45度
-		//	(float)window_width / window_height,	// アスペクト比（画面横幅/画面縦幅）
-		//	0.1f, 1000.0f			// 前端、奥端
-		//);
-
-
 	}
+
+	// ******************************************
+	// 06_04. 定数バッファの切り替え
+
+	ID3D12Resource* constBuffTransform1 = nullptr;
+	ConstBufferDataTransform* constMapTransform1 = nullptr;
+
+	// 定数バッファの生成
+	result = device->CreateCommittedResource(
+		&cbHeapProp, // ヒープ設定
+		D3D12_HEAP_FLAG_NONE,
+		&cbResourceDesc, // リソース設定
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&constBuffTransform1));
+	assert(SUCCEEDED(result));
+
+	// 定数バッファのマッピング
+	result = constBuffTransform1->Map(0, nullptr, (void**)&constMapTransform1); // マッピング
+	assert(SUCCEEDED(result));
+
+	// *********************************
+
+
 
 	// 射影変換行列(透視投影)
 	XMMATRIX matProjection = XMMatrixPerspectiveFovLH(
@@ -1032,6 +1035,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	scale = { 1.f, 1.0f, 1.0f };
 	rotation = { 0.0f, 0.0f, 0.0f };
 
+
 	// **********************************************
 	// ゲームループ
 	while (true) {
@@ -1117,7 +1121,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		matWorld *= matTrans;           // ワールド行列に平行移動を反映
 
 		//定数バッファにデータ転送
-		constMapTransform->mat = matWorld * matView * matProjection;
+		constMapTransform0->mat = matWorld * matView * matProjection;
+
+
+		// *****************************************************
+		// 06_04. 定数バッファの切り替え
+
+		// ワールド変換行列
+		XMMATRIX matWorld1;
+		matWorld1 = XMMatrixIdentity();
+		// 各種変形行列を計算
+		XMMATRIX matScale1 = XMMatrixScaling(1.0f, 1.0f, 1.0f);
+		XMMATRIX matRot1 = XMMatrixRotationY(XM_PI / 4.0f);
+		XMMATRIX matTrans1 = XMMatrixTranslation(-20.0f, 0, 0);
+		// ワールド行列を合成
+		matWorld1 = matScale1 * matRot1 * matTrans1;
+		// ワールド、ビュー、射影行列を合成してシェーダーに転送
+		constMapTransform1->mat = matWorld1 * matView * matProjection;
+
 
 
 
@@ -1208,12 +1229,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// インデックスバッファビューの設定コマンド
 		commandList->IASetIndexBuffer(&ibView);
 
-		// 定数バッファビュー(CBV)の設定コマンド
-		commandList->SetGraphicsRootConstantBufferView(2, constBuffTransform->GetGPUVirtualAddress());
+		// 0番定数バッファビュー(CBV)の設定コマンド
+		commandList->SetGraphicsRootConstantBufferView(2, constBuffTransform0->GetGPUVirtualAddress());
 
 		// 描画コマンド
 		commandList->DrawIndexedInstanced(_countof(indices), 1, 0, 0, 0);
 
+		// 1番定数バッファビュー(CBV)の設定コマンド
+		commandList->SetGraphicsRootConstantBufferView(2, constBuffTransform1->GetGPUVirtualAddress());
+
+		// 描画コマンド
+		commandList->DrawIndexedInstanced(_countof(indices), 1, 0, 0, 0);
 
 
 
